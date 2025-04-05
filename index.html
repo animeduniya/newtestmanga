@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkyAnime Manga Reader</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #121212;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    header {
+      background: #1e1e1e;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.8rem;
+      color: #00bcd4;
+    }
+    input[type="text"] {
+      padding: 0.5rem;
+      width: 300px;
+      border: none;
+      border-radius: 4px;
+    }
+    .manga-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 1rem;
+      padding: 2rem;
+    }
+    .manga {
+      background: #222;
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .manga:hover {
+      transform: scale(1.05);
+    }
+    .manga img {
+      width: 100%;
+      height: 240px;
+      object-fit: cover;
+    }
+    .manga-title {
+      padding: 0.5rem;
+      text-align: center;
+      font-weight: bold;
+    }
+    .reader {
+      padding: 1rem;
+    }
+    .reader img {
+      width: 100%;
+      margin: 0 auto;
+      display: block;
+    }
+    .back-button {
+      margin: 1rem;
+      background: #00bcd4;
+      border: none;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      border-radius: 5px;
+      color: #000;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SkyAnime</h1>
+    <input type="text" id="search" placeholder="Search manga..."/>
+  </header>
+
+  <div id="content" class="manga-list"></div>
+
+  <script>
+    const content = document.getElementById("content");
+    const searchInput = document.getElementById("search");
+
+    async function fetchMangaList(query = "") {
+      content.innerHTML = "Loading manga...";
+      let url = `https://api.mangadex.org/manga?limit=30&includes[]=cover_art&title=${query}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      renderManga(data.data);
+    }
+
+    function renderManga(mangas) {
+      content.innerHTML = "";
+      mangas.forEach(async manga => {
+        const title = manga.attributes.title.en || "No title";
+        const id = manga.id;
+        const coverId = manga.relationships.find(r => r.type === "cover_art")?.attributes?.fileName;
+        const coverUrl = coverId 
+          ? `https://uploads.mangadex.org/covers/${id}/${coverId}.256.jpg`
+          : "https://via.placeholder.com/160x240?text=No+Cover";
+        const mangaEl = document.createElement("div");
+        mangaEl.className = "manga";
+        mangaEl.innerHTML = `
+          <img src="${coverUrl}" alt="${title}"/>
+          <div class="manga-title">${title}</div>
+        `;
+        mangaEl.onclick = () => loadChapters(id, title);
+        content.appendChild(mangaEl);
+      });
+    }
+
+    async function loadChapters(mangaId, title) {
+      content.innerHTML = `<button class="back-button" onclick="fetchMangaList()">← Back</button><h2 style="padding-left:1rem;">${title}</h2>`;
+      const res = await fetch(`https://api.mangadex.org/chapter?limit=1&translatedLanguage[]=en&manga=${mangaId}&order[chapter]=asc`);
+      const data = await res.json();
+      if (data.data.length === 0) {
+        content.innerHTML += `<p style="padding:1rem;">No English chapters available.</p>`;
+        return;
+      }
+      const chapterId = data.data[0].id;
+      loadPages(chapterId);
+    }
+
+    async function loadPages(chapterId) {
+      const res = await fetch(`https://api.mangadex.org/at-home/server/${chapterId}`);
+      const data = await res.json();
+      const baseUrl = data.baseUrl;
+      const chapterHash = data.chapter.hash;
+      const pages = data.chapter.data;
+
+      pages.forEach(page => {
+        const img = document.createElement("img");
+        img.src = `${baseUrl}/data/${chapterHash}/${page}`;
+        content.appendChild(img);
+      });
+    }
+
+    searchInput.addEventListener("input", (e) => {
+      const query = e.target.value;
+      if (query.length >= 2) {
+        fetchMangaList(query);
+      } else {
+        fetchMangaList(); // Default explore
+      }
+    });
+
+    // Initial load
+    fetchMangaList();
+  </script>
+</body>
+</html>
