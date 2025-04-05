@@ -1,156 +1,131 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SkyAnime Manga Reader</title>
+  <meta charset="UTF-8">
+  <title>SkyAnime 🌌 - World's Best Anime Streaming Website</title>
   <style>
     body {
-      margin: 0;
       background-color: #121212;
-      color: #fff;
-      font-family: 'Segoe UI', sans-serif;
-    }
-    header {
-      background: #1e1e1e;
-      padding: 1rem 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    header h1 {
+      color: white;
+      font-family: Arial, sans-serif;
       margin: 0;
-      font-size: 1.8rem;
-      color: #00bcd4;
-    }
-    input[type="text"] {
-      padding: 0.5rem;
-      width: 300px;
-      border: none;
-      border-radius: 4px;
-    }
-    .manga-list {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 1rem;
-      padding: 2rem;
-    }
-    .manga {
-      background: #222;
-      border-radius: 10px;
-      overflow: hidden;
-      cursor: pointer;
-      transition: transform 0.2s;
-    }
-    .manga:hover {
-      transform: scale(1.05);
-    }
-    .manga img {
-      width: 100%;
-      height: 240px;
-      object-fit: cover;
-    }
-    .manga-title {
-      padding: 0.5rem;
+      padding: 20px;
       text-align: center;
-      font-weight: bold;
     }
-    .reader {
-      padding: 1rem;
+    img {
+      border-radius: 10px;
+      margin: 10px;
     }
-    .reader img {
-      width: 100%;
-      margin: 0 auto;
+    a {
+      color: cyan;
       display: block;
+      margin: 5px;
+      text-decoration: none;
     }
-    .back-button {
-      margin: 1rem;
-      background: #00bcd4;
-      border: none;
-      padding: 0.5rem 1rem;
-      cursor: pointer;
-      border-radius: 5px;
-      color: #000;
+    .episode-link:hover {
+      text-decoration: underline;
+    }
+    .anime-card {
+      display: inline-block;
+      margin: 15px;
+      text-align: center;
+    }
+    .back-btn {
+      background: #333;
+      color: white;
+      padding: 8px 14px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      text-decoration: none;
+      display: inline-block;
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>SkyAnime</h1>
-    <input type="text" id="search" placeholder="Search manga..."/>
-  </header>
 
-  <div id="content" class="manga-list"></div>
+  <h1>SkyAnime 🌌</h1>
+  <div id="app">
+    <p>Loading...</p>
+  </div>
 
   <script>
-    const content = document.getElementById("content");
-    const searchInput = document.getElementById("search");
+    const params = new URLSearchParams(window.location.search);
+    const animeId = params.get("id");
+    const episodeId = params.get("episodeId");
+    const BASE_URL = "https://api-consumet-org-beta.vercel.app";
 
-    async function fetchMangaList(query = "") {
-      content.innerHTML = "Loading manga...";
-      let url = `https://api.mangadex.org/manga?limit=30&includes[]=cover_art&title=${query}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      renderManga(data.data);
-    }
+    const app = document.getElementById("app");
 
-    function renderManga(mangas) {
-      content.innerHTML = "";
-      mangas.forEach(async manga => {
-        const title = manga.attributes.title.en || "No title";
-        const id = manga.id;
-        const coverId = manga.relationships.find(r => r.type === "cover_art")?.attributes?.fileName;
-        const coverUrl = coverId 
-          ? `https://uploads.mangadex.org/covers/${id}/${coverId}.256.jpg`
-          : "https://via.placeholder.com/160x240?text=No+Cover";
-        const mangaEl = document.createElement("div");
-        mangaEl.className = "manga";
-        mangaEl.innerHTML = `
-          <img src="${coverUrl}" alt="${title}"/>
-          <div class="manga-title">${title}</div>
-        `;
-        mangaEl.onclick = () => loadChapters(id, title);
-        content.appendChild(mangaEl);
+    // --- EPISODE PLAYER ---
+    if (episodeId) {
+      fetch(`${BASE_URL}/anime/zoro/watch?episodeId=${episodeId}`)
+        .then(res => res.json())
+        .then(data => {
+          app.innerHTML = `
+            <a class="back-btn" href="javascript:history.back()">← Back</a>
+            <h2>Now Playing</h2>
+            <video src="${data.sources[0].url}" controls width="720"></video>
+          `;
+        });
+    
+    // --- ANIME DETAILS ---
+    } else if (animeId) {
+      fetch(`${BASE_URL}/anime/zoro/info?id=${animeId}`)
+        .then(res => res.json())
+        .then(data => {
+          let html = `
+            <a class="back-btn" href="./">← Back</a>
+            <h2>${data.title}</h2>
+            <img src="${data.image}" width="200">
+            <p>${data.description || "No description available."}</p>
+            <h3>Episodes</h3>
+          `;
+          data.episodes.forEach(ep => {
+            html += `<a class="episode-link" href="?episodeId=${ep.id}">Episode ${ep.number}</a>`;
+          });
+          app.innerHTML = html;
+        });
+
+    // --- HOMEPAGE (Trending Anime) ---
+    } else {
+      const query = `
+        query {
+          Page(perPage: 10) {
+            media(type: ANIME, sort: TRENDING_DESC) {
+              id
+              title {
+                romaji
+              }
+              coverImage {
+                large
+              }
+            }
+          }
+        }
+      `;
+
+      fetch("https://graphql.anilist.co", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ query })
+      })
+      .then(res => res.json())
+      .then(data => {
+        const animeList = data.data.Page.media;
+        app.innerHTML = "<h2>Trending Anime</h2>";
+        animeList.forEach(anime => {
+          const div = document.createElement("div");
+          div.className = "anime-card";
+          div.innerHTML = `
+            <h3>${anime.title.romaji}</h3>
+            <a href="?id=${anime.id}">
+              <img src="${anime.coverImage.large}" width="200">
+            </a>
+          `;
+          app.appendChild(div);
+        });
       });
     }
-
-    async function loadChapters(mangaId, title) {
-      content.innerHTML = `<button class="back-button" onclick="fetchMangaList()">← Back</button><h2 style="padding-left:1rem;">${title}</h2>`;
-      const res = await fetch(`https://api.mangadex.org/chapter?limit=1&translatedLanguage[]=en&manga=${mangaId}&order[chapter]=asc`);
-      const data = await res.json();
-      if (data.data.length === 0) {
-        content.innerHTML += `<p style="padding:1rem;">No English chapters available.</p>`;
-        return;
-      }
-      const chapterId = data.data[0].id;
-      loadPages(chapterId);
-    }
-
-    async function loadPages(chapterId) {
-      const res = await fetch(`https://api.mangadex.org/at-home/server/${chapterId}`);
-      const data = await res.json();
-      const baseUrl = data.baseUrl;
-      const chapterHash = data.chapter.hash;
-      const pages = data.chapter.data;
-
-      pages.forEach(page => {
-        const img = document.createElement("img");
-        img.src = `${baseUrl}/data/${chapterHash}/${page}`;
-        content.appendChild(img);
-      });
-    }
-
-    searchInput.addEventListener("input", (e) => {
-      const query = e.target.value;
-      if (query.length >= 2) {
-        fetchMangaList(query);
-      } else {
-        fetchMangaList(); // Default explore
-      }
-    });
-
-    // Initial load
-    fetchMangaList();
   </script>
 </body>
 </html>
