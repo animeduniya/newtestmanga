@@ -66,27 +66,58 @@
             <h2>Now Playing</h2>
             <video src="${data.sources[0].url}" controls width="720"></video>
           `;
-        });
-    
-    // --- ANIME DETAILS ---
-    } else if (animeId) {
-      fetch(`${BASE_URL}/anime/zoro/info?id=${animeId}`)
-        .then(res => res.json())
-        .then(data => {
-          let html = `
-            <a class="back-btn" href="./">← Back</a>
-            <h2>${data.title}</h2>
-            <img src="${data.image}" width="200">
-            <p>${data.description || "No description available."}</p>
-            <h3>Episodes</h3>
-          `;
-          data.episodes.forEach(ep => {
-            html += `<a class="episode-link" href="?episodeId=${ep.id}">Episode ${ep.number}</a>`;
-          });
-          app.innerHTML = html;
+        }).catch(err => {
+          app.innerHTML = `<p>⚠️ Failed to load episode. Please try again later.</p>`;
         });
 
-    // --- HOMEPAGE (Trending Anime) ---
+    // --- ANIME DETAILS ---
+    } else if (animeId) {
+      fetch(`https://graphql.anilist.co`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          query: `query ($id: Int) {
+            Media(id: $id, type: ANIME) {
+              title { romaji }
+            }
+          }`,
+          variables: { id: parseInt(animeId) }
+        })
+      })
+      .then(res => res.json())
+      .then(anilistData => {
+        const title = anilistData.data.Media.title.romaji;
+
+        // Now search Zoro by title
+        fetch(`${BASE_URL}/anime/zoro/${encodeURIComponent(title)}`)
+          .then(res => res.json())
+          .then(searchData => {
+            if (!searchData.results || searchData.results.length === 0) {
+              app.innerHTML = `<p>❌ Could not find "${title}" on Zoro.</p>`;
+              return;
+            }
+
+            const zoroId = searchData.results[0].id;
+
+            fetch(`${BASE_URL}/anime/zoro/info?id=${encodeURIComponent(zoroId)}`)
+              .then(res => res.json())
+              .then(data => {
+                let html = `
+                  <a class="back-btn" href="./">← Back</a>
+                  <h2>${data.title}</h2>
+                  <img src="${data.image}" width="200">
+                  <p>${data.description || "No description available."}</p>
+                  <h3>Episodes</h3>
+                `;
+                data.episodes.forEach(ep => {
+                  html += `<a class="episode-link" href="?episodeId=${ep.id}">Episode ${ep.number}</a>`;
+                });
+                app.innerHTML = html;
+              });
+          });
+      });
+
+    // --- HOMEPAGE (Trending Anime from AniList) ---
     } else {
       const query = `
         query {
