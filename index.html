@@ -3,194 +3,213 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SkyAnime - World's Best Anime Streaming</title>
+  <title>SkyAnime</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background-color: #121212;
+      background-color: #1e1e1e;
       color: white;
+      font-family: sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 0;
     }
-
-    h1, h2 {
+    header {
+      background: #111;
+      padding: 10px;
       text-align: center;
     }
-
-    #anime-list, #anime-details {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 20px;
+    #search {
+      width: 80%;
+      padding: 10px;
+      font-size: 16px;
+      margin: 10px auto;
+      display: block;
     }
-
-    .anime-card {
-      width: 180px;
-      cursor: pointer;
-      border: 1px solid #333;
+    .anime-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+      padding: 10px;
+    }
+    .anime-item {
+      background: #2e2e2e;
       padding: 10px;
       border-radius: 10px;
-      background-color: #1e1e1e;
-      transition: transform 0.2s;
+      cursor: pointer;
+      text-align: center;
     }
-
-    .anime-card:hover {
-      transform: scale(1.05);
-    }
-
-    .anime-card img {
+    .anime-item img {
       width: 100%;
       border-radius: 10px;
     }
-
-    #anime-details {
+    #anime-info {
+      padding: 10px;
+    }
+    #video-player {
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+      display: none;
       flex-direction: column;
       align-items: center;
     }
-
     video {
       width: 100%;
-      max-width: 720px;
-      margin-top: 20px;
+      height: auto;
+      margin-bottom: 10px;
     }
-
-    #search-bar {
-      text-align: center;
-      margin: 20px;
-    }
-
-    input[type="text"] {
-      padding: 10px;
-      font-size: 16px;
-      width: 300px;
-    }
-
-    #pagination {
+    .controls {
       display: flex;
-      justify-content: center;
-      margin-top: 20px;
       gap: 10px;
+      justify-content: center;
     }
-
-    #pagination button {
-      padding: 10px 20px;
-      font-size: 16px;
-      background: #333;
+    button {
+      background: #444;
       color: white;
       border: none;
+      padding: 10px;
       border-radius: 5px;
       cursor: pointer;
     }
-
-    #pagination button:hover {
-      background: #555;
+    .pagination {
+      text-align: center;
+      margin: 20px;
     }
   </style>
 </head>
 <body>
-  <h1>🌌 SkyAnime 🌌</h1>
-  <div id="search-bar">
-    <input type="text" id="search" placeholder="Search any anime...">
-    <button onclick="searchAnime()">Search</button>
+  <header>
+    <h1>SkyAnime</h1>
+    <input id="search" placeholder="Search anime..." />
+  </header>
+
+  <div class="anime-grid" id="anime-list"></div>
+
+  <div class="pagination">
+    <button onclick="changePage(-1)">Previous</button>
+    <span id="page-number">1</span>
+    <button onclick="changePage(1)">Next</button>
   </div>
 
-  <h2>🔥 Trending Anime</h2>
-  <div id="anime-list"></div>
+  <div id="anime-info"></div>
 
-  <div id="pagination">
-    <button onclick="prevPage()">Previous</button>
-    <button onclick="nextPage()">Next</button>
+  <div id="video-player">
+    <video id="player" controls></video>
+    <div class="controls">
+      <button onclick="skip(-10)">⏪ 10s</button>
+      <button onclick="skip(10)">10s ⏩</button>
+      <select id="qualitySelector"></select>
+    </div>
   </div>
-
-  <div id="anime-details"></div>
 
   <script>
+    const BASE_API = "https://api-consumet-org-beta.vercel.app/anime/zoro";
     const CORS_PROXY = "https://api.allorigins.win/raw?url=";
-    const BASE_URL = "https://api-consumet-org-beta.vercel.app";
     let currentPage = 1;
-    let isSearching = false;
+    let currentEpisodes = [];
+    let currentEpisodeIndex = 0;
 
-    function fetchTrending(page = 1) {
-      isSearching = false;
-      document.getElementById("anime-details").innerHTML = '';
-      fetch(`${CORS_PROXY}${BASE_URL}/anime/zoro/trending?page=${page}`)
-        .then(res => res.json())
-        .then(data => renderAnimeList(data.results))
-        .catch(err => console.error("Trending fetch error", err));
+    const list = document.getElementById("anime-list");
+    const info = document.getElementById("anime-info");
+    const player = document.getElementById("player");
+    const videoBox = document.getElementById("video-player");
+    const searchInput = document.getElementById("search");
+    const pageNum = document.getElementById("page-number");
+    const qualitySelector = document.getElementById("qualitySelector");
+
+    async function fetchData(url) {
+      const res = await fetch(CORS_PROXY + encodeURIComponent(url));
+      return await res.json();
     }
 
-    function renderAnimeList(animeList) {
-      const container = document.getElementById("anime-list");
-      container.innerHTML = "";
-      animeList.forEach(anime => {
-        const card = document.createElement("div");
-        card.className = "anime-card";
-        card.innerHTML = `
-          <img src="${anime.image}" />
-          <p>${anime.title.english || anime.title.romaji}</p>
-        `;
-        card.onclick = () => showAnimeDetails(anime.id);
-        container.appendChild(card);
+    async function fetchTrending(page = 1) {
+      list.innerHTML = "Loading...";
+      try {
+        const data = await fetchData(`${BASE_API}/trending?page=${page}`);
+        displayAnime(data.results);
+      } catch (err) {
+        list.innerHTML = "Failed to load trending anime.";
+      }
+    }
+
+    function displayAnime(animes) {
+      list.innerHTML = "";
+      animes.forEach(a => {
+        const item = document.createElement("div");
+        item.className = "anime-item";
+        item.innerHTML = `<img src="${a.image}" /><br>${a.title.english || a.title.romaji}`;
+        item.onclick = () => showDetails(a.id);
+        list.appendChild(item);
       });
     }
 
-    function showAnimeDetails(id) {
-      document.getElementById("anime-details").innerHTML = "Loading...";
-      fetch(`${CORS_PROXY}${BASE_URL}/anime/zoro/info?id=${id}`)
-        .then(res => res.json())
-        .then(data => {
-          const detailsContainer = document.getElementById("anime-details");
-          detailsContainer.innerHTML = `
-            <h2>${data.title.english || data.title.romaji}</h2>
-            <p>${data.description || "No description available."}</p>
-            <h3>Episodes</h3>
-            <div id="episodes"></div>
-          `;
-          const epContainer = document.getElementById("episodes");
-          data.episodes.forEach(ep => {
-            const btn = document.createElement("button");
-            btn.textContent = `Episode ${ep.number}`;
-            btn.onclick = () => loadEpisodeStream(ep.id);
-            epContainer.appendChild(btn);
-          });
-        })
-        .catch(err => console.error("Anime info fetch error", err));
+    async function showDetails(id) {
+      info.innerHTML = "Loading...";
+      try {
+        const data = await fetchData(`${BASE_API}/info/${id}`);
+        currentEpisodes = data.episodes;
+        currentEpisodeIndex = 0;
+        info.innerHTML = `<h2>${data.title.english || data.title.romaji}</h2><p>${data.description}</p>`;
+        playEpisode(currentEpisodes[currentEpisodeIndex]);
+      } catch (err) {
+        info.innerHTML = "Failed to load anime details.";
+      }
     }
 
-    function loadEpisodeStream(episodeId) {
-      document.getElementById("anime-details").innerHTML += "<p>Loading video...</p>";
-      fetch(`${CORS_PROXY}${BASE_URL}/anime/zoro/watch?episodeId=${episodeId}`)
-        .then(res => res.json())
-        .then(data => {
-          const video = document.createElement("video");
-          video.controls = true;
-          video.src = data.sources[0].url;
-          const container = document.getElementById("anime-details");
-          container.appendChild(video);
-        })
-        .catch(err => console.error("Watch fetch error", err));
+    async function playEpisode(episode) {
+      try {
+        const data = await fetchData(`${BASE_API}/watch?episodeId=${episode.id}`);
+        player.src = data.sources[0].url;
+
+        qualitySelector.innerHTML = "";
+        data.sources.forEach(source => {
+          const opt = document.createElement("option");
+          opt.value = source.url;
+          opt.text = source.quality;
+          qualitySelector.appendChild(opt);
+        });
+
+        qualitySelector.onchange = () => {
+          player.src = qualitySelector.value;
+          player.play();
+        };
+
+        videoBox.style.display = "flex";
+        player.play();
+      } catch (err) {
+        alert("Failed to load episode.");
+      }
     }
 
-    function searchAnime() {
-      const query = document.getElementById("search").value.trim();
-      if (!query) return;
-      isSearching = true;
-      document.getElementById("anime-details").innerHTML = '';
-      fetch(`${CORS_PROXY}${BASE_URL}/anime/zoro/${encodeURIComponent(query)}`)
-        .then(res => res.json())
-        .then(data => renderAnimeList(data.results))
-        .catch(err => console.error("Search fetch error", err));
+    function skip(seconds) {
+      player.currentTime += seconds;
     }
 
-    function nextPage() {
-      currentPage++;
-      if (!isSearching) fetchTrending(currentPage);
+    player.onended = () => {
+      currentEpisodeIndex++;
+      if (currentEpisodeIndex < currentEpisodes.length) {
+        playEpisode(currentEpisodes[currentEpisodeIndex]);
+      }
+    };
+
+    function changePage(dir) {
+      if (currentPage + dir < 1) return;
+      currentPage += dir;
+      pageNum.textContent = currentPage;
+      fetchTrending(currentPage);
     }
 
-    function prevPage() {
-      if (currentPage > 1) currentPage--;
-      if (!isSearching) fetchTrending(currentPage);
-    }
+    searchInput.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter") {
+        const q = searchInput.value.trim();
+        if (q === "") return fetchTrending(currentPage);
+        try {
+          const data = await fetchData(`${BASE_API}/${encodeURIComponent(q)}`);
+          displayAnime(data.results);
+        } catch {
+          list.innerHTML = "Search failed.";
+        }
+      }
+    });
 
     fetchTrending();
   </script>
